@@ -4,7 +4,7 @@
   "description": "Books a class at Virgin Active and emails you with confirmation",
   "main": "index.js",
   "scripts": {
-    "start": "sh scripts/start.sh"
+    "start": "sh scripts/start.sh",
     "test": "sh scripts/test.sh"
   },
   "keywords": [],
