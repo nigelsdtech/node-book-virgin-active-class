@@ -51,14 +51,19 @@ module.exports = {
     password: 'OVERRIDE_ME',
     classToBook: {
       name: "Name of a class as per the VA timetable",
-      // Start date of the class in yyyy-dd-mm format. Can also be set to "one week later" for, one week from the current date
+      // Start date of the class in yyyy-mm-dd format. Can also be set to "one week later" for, one week from the current date
       date: "2018-02-08",
       time: "13:05" // Start time of the class in HH:MM format.
     }
   },
 
   reporter: {
-    appName             : defer( function (cfg) { return cfg.appName+'-'+process.env.NODE_ENV } ),
+    appName             : defer( function (cfg) {
+      var subject = cfg.appName
+      if (process.env.NODE_APP_INSTANCE) { subject += '-' + process.env.NODE_APP_INSTANCE }
+      if (process.env.NODE_ENV)          { subject += '-' + process.env.NODE_ENV }
+      return subject
+    } ),
     appSpecificPassword : 'OVERRIDE_ME',
     emailsFrom          : 'OVERRIDE_ME',
     name                : 'Reporter (Personal)',

@@ -272,6 +272,23 @@ describe('VirginActive.bookClass', function () {
       });
     })
 
+    it('bails out early when you\'re already booked', function (done) {
+
+      var cfgRestore = cfg.va.classToBook
+
+      cfg.va.classToBook = {
+        name: 'Strength - Power Yoga',
+        date: '2018-02-08',
+        time: '18:00'
+      };
+
+      privateFn(null, function (e,retState) {
+        retState.should.equal('booked')
+        cfg.va.classToBook = cfgRestore
+        done();
+      })
+    });
+
     it('bails out early when the class is full', function (done) {
 
       var cfgRestore = cfg.va.classToBook
@@ -288,7 +305,6 @@ describe('VirginActive.bookClass', function () {
         done();
       })
     });
-
     it('returns an error if the class is not found', function (done) {
 
       var cfgRestore = cfg.va.classToBook
