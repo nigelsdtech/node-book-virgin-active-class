@@ -8,7 +8,7 @@ module.exports = {
   },
 
   log : {
-    level: "FATAL"
+    level: "INFO"
   },
 
   va: {

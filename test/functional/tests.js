@@ -1,12 +1,13 @@
-var cfg        = require('config');
-var chai       = require('chai');
+var cfg               = require('config');
+var chai              = require('chai');
 var EmailNotification = require('email-notification');
-var gmailModel = require('gmail-model');
-var log4js     = require('log4js');
-var rewire     = require('rewire');
-var sinon      = require('sinon');
-var bvac       = rewire('../../lib/BookVirginActiveClass.js');
-var Q          = require('q');
+var gmailModel        = require('gmail-model');
+var log4js            = require('log4js');
+var sinon             = require('sinon');
+var Q                 = require('q');
+var bvac              = require('../../lib/BookVirginActiveClass.js');
+var VAC               = require('../../lib/VirginActiveClass.js');
+var reporter          = require('reporter');
 
 /*
  * Set up chai
@@ -15,7 +16,7 @@ chai.should();
 
 
 // Common testing timeout
-var timeout = cfg.testTimeout || (60*1000);
+var timeout = cfg.testTimeout || (15*1000);
 
 
   /*
@@ -77,13 +78,23 @@ function getNewEN (params) {
 }
 
 
+
+/**
+ * Stub used to mock out the lib/VirginActiveClass package.
+ */
+var vacStub
+
+
 /**
  * startScript
  *
  * @desc Sends a notification email and triggers the script
  *
  * @param {object=}  params                  - Parameters for request
- * @param {boolean}  params.sendNotification - Whether or not to send out the initial notification email
+ * @param {boolean}  params.emailDelay       - Whether or not to create a delay between sending out trigger notifications and starting the script (defaults to true)
+ * @param {boolean}  params.sendNotification - Whether or not to send out the initial notification email (defaults to true)
+ * @param {string}   params.vacErr           - VirginActiveClass.process returns cb(err, ret). This is the mocked err (defaults to null)
+ * @param {string}   params.vacRet           - VirginActiveClass.process returns cb(err, ret). This is the mocked ret (defaults to null)
  * @param {callback} cb                      - The callback that handles the response. cb(err)
  *
  */
@@ -93,10 +104,16 @@ function startScript(params, cb) {
   log.info('%s: pre-emptive cleanup', fn)
 
   var opts = {
-    sendNotification: true
+    emailDelay: true,
+    sendNotification: true,
+    vacErr: null,
+    vacRet: null
   }
 
   if (params && params.hasOwnProperty('sendNotification') && params.sendNotification == false) { opts.sendNotification = false }
+  if (params && params.hasOwnProperty('vacErr')                                              ) { opts.vacErr           = params.vacErr }
+  if (params && params.hasOwnProperty('vacRet')                                              ) { opts.vacRet           = params.vacRet }
+  if (params && params.hasOwnProperty('emailDelay')       && params.emailDelay       == false) { opts.emailDelay       = false }
 
   Q.nfcall(cleanup,null)
   .then( function () {
@@ -117,14 +134,23 @@ function startScript(params, cb) {
     }
   })
   .then( function () {
+
     // Add an arbitrary delay to allow the email to arrive
-    var d = Q.defer()
-    setTimeout(function () {
-      d.resolve()
-    } ,3000)
-    return d.promise
+
+    if (opts.emailDelay) {
+      var d = Q.defer()
+      setTimeout(function () {
+        d.resolve()
+      } , 3000)
+      return d.promise
+    } else {
+      return Q.resolve()
+    }
   })
   .then( function () {
+
+    vacStub = sinon.stub(VAC.prototype, 'process')
+    vacStub.yields(opts.vacErr, opts.vacRet)
 
     log.info('%s: start the script', fn)
     return Q.nfcall(bvac)
@@ -154,18 +180,18 @@ function startScript(params, cb) {
 function cleanup(params, cb) {
 
   var fn = 'cleanup'
-
   var gsc = "to:" + recipientAddress
 
-  var deferredEr  = Q.defer()
-  var deferredEs  = Q.defer()
-  var deferredLbl = Q.defer()
+  var jobs = []
 
 
   // Cleanup the report email received by the recipient
   var enRecipient = getNewEN ({who: 'r', gsc: 'is:inbox ' + gsc})
 
   log.info('%s: recipient: cleaning up...', fn)
+  var deferredEr  = Q.defer()
+  jobs.push(deferredEr.promise)
+
   enRecipient.hasBeenReceived(null,function (err, hbr) {
     if (hbr) {
       enRecipient.trash(null,function (err) {
@@ -179,8 +205,12 @@ function cleanup(params, cb) {
     }
   })
 
+
   // Cleanup the application label in the recipient mailbox
   log.info('%s: recipient: getting label to delete...', fn)
+  var deferredLbl  = Q.defer()
+  jobs.push(deferredLbl.promise)
+
   enRecipient.getProcessedLabelId(null,function (err, processedLabelId) {
     testRecipientGmail.deleteLabel ({
       labelId: processedLabelId
@@ -194,9 +224,12 @@ function cleanup(params, cb) {
 
 
   // Cleanup the report email sent by the sender
-  var enSender    = getNewEN ({who: 's', gsc: 'in:sent '  + gsc})
+  var enSender = getNewEN ({who: 's', gsc: 'in:sent '  + gsc})
 
   log.info('%s: sender: cleaning up...', fn)
+  var deferredEs = Q.defer()
+  jobs.push(deferredEs.promise)
+
   enSender.hasBeenReceived(null,function (err, hbr) {
     if (hbr) {
       enSender.trash(null,function (err) {
@@ -211,12 +244,14 @@ function cleanup(params, cb) {
   })
 
 
-  // Return the callback when all promises have resolved
-  Q.allSettled([ deferredEr.promise, deferredEs.promise, deferredLbl.promise ])
-  .catch(function (e) {console.error(e)})
-  .fin(function () {cb(null)})
-}
+  // Cleanup the VirginActive stub
+  if (vacStub) { vacStub.restore() }
 
+  // Return the callback when all promises have resolved
+  Q.allSettled(jobs)
+  .catch(function (e) {console.error(e)})
+  .fin(cb)
+}
 
 
 
@@ -224,14 +259,9 @@ describe('When a notification is received and it books the class', function () {
 
   this.timeout(timeout)
 
-  var vaOld
-
   before( function (done) {
     // Make VA pretend to be successful
-    vaOld = bvac.__get__('VirginActive')
-    bvac.__set__('VirginActive', { process: function (p,cb) { cb(null,'booked') } } )
-
-    startScript(null,done)
+    startScript({vacRet: 'booked'} ,done)
   })
 
 
@@ -260,7 +290,6 @@ describe('When a notification is received and it books the class', function () {
   })
 
   after( function (done) {
-    bvac.__set__('VirginActive', vaOld)
     cleanup(null,done)
   })
 })
@@ -270,8 +299,6 @@ describe('When a notification is received and there are problems with virgin', f
 
 
   this.timeout(timeout)
-
-  var vaOld
 
   var tests = [{
     desc: 'When there is a generic problem with virgin',
@@ -289,10 +316,7 @@ describe('When a notification is received and there are problems with virgin', f
 
       before( function (done) {
         // Make VA pretend to bug out
-        vaOld = bvac.__get__('VirginActive')
-        bvac.__set__('VirginActive', { process: function (p,cb) { cb(test.err) } } )
-
-        startScript(null,done)
+        startScript({vacErr: test.err},done)
       })
 
 
@@ -320,7 +344,6 @@ describe('When a notification is received and there are problems with virgin', f
       })
 
       after( function (done) {
-        bvac.__set__('VirginActive', vaOld)
         cleanup(null,done)
       })
     })
@@ -332,24 +355,22 @@ describe('When no notification is received', function () {
 
   this.timeout(timeout)
 
-  var vaOld
-  var rptOld
+  var rptStubSCN, rptStubHe
 
   before( function (done) {
-    // Make VA pretend to bug out
-    vaOld = bvac.__get__('VirginActive')
-    bvac.__set__('VirginActive', { process: function (p,cb) { throw new Error ('The code should not have reached here') } } )
-
-    // Stub out the reporter to avoid any kind of emails being sent out (this is a preventitive measure if something goes
+    // Make VA pretend to bug out and stub out the reporter to avoid any kind of emails being sent out (this is a preventitive measure if something goes
     // wrong with this test)
-    bvac.__set__('reporter', {
-      sendCompletionNotice: function (p,cb) { throw new Error ('reporter.sendCompletionNotice - The code should not have reached here') },
-      handleError:          function (p,cb) { throw new Error ('reporter.handleError - The code should not have reached here') }
-    })
+    rptStubSCN = sinon.stub(reporter, 'sendCompletionNotice')
+    rptStubHe = sinon.stub(reporter, 'handleError')
+    rptStubSCN.yields('reporter.sendCompletionNotice - The code should not have reached here')
+    rptStubHe.yields('reporter.handleError - The code should not have reached here')
 
-    startScript({sendNotification: false},done)
+    startScript({sendNotification: false, vacErr: 'vacErr - The code should not have reached here', emailDelay: 0}, done)
   })
 
+  it ('Does not attempt to contact Virgin', function() {
+    vacStub.called.should.equal(false)
+  })
 
   it ('Does not send any kind of report', function(done) {
 
@@ -364,8 +385,8 @@ describe('When no notification is received', function () {
   })
 
   after( function (done) {
-    bvac.__set__('VirginActive', vaOld)
-    bvac.__set__('reporter', rptOld)
+    rptStubSCN.restore()
+    rptStubHe.restore()
     cleanup(null,done)
   })
 

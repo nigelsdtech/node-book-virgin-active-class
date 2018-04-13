@@ -1,10 +1,10 @@
-var cfg        = require('config');
-var chai       = require('chai');
-var dateformat = require('dateformat');
-var fs         = require('fs');
-var nock       = require('nock');
-var rewire     = require('rewire');
-var va         = rewire('../../lib/VirginActive.js');
+var cfg                = require('config');
+var chai               = require('chai');
+var dateformat         = require('dateformat');
+var fs                 = require('fs');
+var nock               = require('nock');
+var sinon              = require('sinon');
+var VirginActiveClass  = require('../../lib/VirginActiveClass.js');
 
 /*
  * Set up chai
@@ -15,7 +15,7 @@ chai.should();
 // Common testing timeout
 var timeout = cfg.testTimeout || (5*1000);
 
-var vaHost = va.__get__('_cfg.va.baseUrl')
+var vaHost = 'https://www.virginactive.co.uk'
 
 
 
@@ -31,7 +31,8 @@ var vaHost = va.__get__('_cfg.va.baseUrl')
  * @param {object=}  params
  * @param {string}   params.describe   - Description of the service that is failing
  * @param {function} params.errMsg     - The message displayed when the page is not as expected
- * @param {function} params.fn         - The function being tested
+ * @param {function} params.vacObj     - The VirginActiveClass object being tested
+ * @param {string}   params.vacFn      - The name of the function to be called in the VirginActiveClas
  * @param {object}   params.nockObj    - An object containing the nock stub. Have to do it this way so we're passing an object reference to this proc and can change its value in real time
  * @param {object}   params.nockObj.fn - The nock stub
  * @param {boolean}  params.only       - True if you only want to run this scenario
@@ -49,7 +50,7 @@ function testUnexpectedResponses(params) {
       .socketDelay(20000)
       .reply(200,'some bad body')
 
-      params.fn(null, function (e, form) {
+      params.vacObj[params.vacFn](null, function (e, form) {
         e.code.should.equal('ESOCKETTIMEDOUT');
         done();
       })
@@ -60,7 +61,7 @@ function testUnexpectedResponses(params) {
       params.nockObj.fn
       .reply(503,'some bad body')
 
-      params.fn(null, function (e, form) {
+      params.vacObj[params.vacFn](null, function (e, form) {
         e.should.equal(params.errMsg);
         done();
       })
@@ -69,19 +70,52 @@ function testUnexpectedResponses(params) {
 }
 
 
+/**
+ * getNewVAC
+ *
+ * Quickly generates a new VAC object
+ *
+ * @param {object=}  params
+ * @param {string}   params.date - Class date in yyyy-mm-dd format
+ * @param {string}   params.name - Class name
+ * @param {string}   params.time - Class time in HH:MM format
+ *
+ * @returns {object} A VirginActiveClass object
+ *
+ */
+function getNewVAC (params) {
+
+  var p = {
+    clubName : 'Fiction Club',
+    date : 'one week later',
+    name : 'Super duper abs',
+    password : 'testPassword',
+    time : '18:30',
+    username : 'HulkHogan'
+  }
+
+  if (params && params.hasOwnProperty('date')) { p.date = params.date }
+  if (params && params.hasOwnProperty('name')) { p.name = params.name }
+  if (params && params.hasOwnProperty('time')) { p.time = params.time }
+
+
+  var vac = new VirginActiveClass(p)
+
+  return vac
+}
+
 
 /*
  * The actual tests
  */
 
-
-describe('VirginActive.doLogin', function () {
+describe('VirginActiveClass.doLogin', function () {
 
   this.timeout(timeout)
 
   // This is an object so its real-time value can be passed to downstream functions
   var nockGetForm = {}
-  var privateFn = va.__get__('doLogin');
+  var vac = getNewVAC();
   var self = this
 
   beforeEach (function () {
@@ -95,8 +129,9 @@ describe('VirginActive.doLogin', function () {
 
   testUnexpectedResponses({
     describe: 'Problems getting the login form',
-    errMsg: 'VirginActive.doLogin: login form is not as expected',
-    fn: privateFn,
+    errMsg: 'VirginActiveClass.doLogin: login form is not as expected',
+    vacObj: vac,
+    vacFn: 'doLogin',
     nockObj: nockGetForm
   })
 
@@ -121,7 +156,8 @@ describe('VirginActive.doLogin', function () {
     testUnexpectedResponses({
       describe: 'Problems submitting the login form',
       errMsg: 'Login response not as expected.',
-      fn: privateFn,
+      vacObj: vac,
+      vacFn: 'doLogin',
       nockObj: nockSubmitForm
     })
 
@@ -134,7 +170,7 @@ describe('VirginActive.doLogin', function () {
         'Set-Cookie': ['.ASPXAUTH=abcdefg; path=/; HttpOnly', '_user=abcdefg']
       })
 
-      privateFn(null, function (e) {
+      vac.doLogin(null, function (e) {
         chai.expect(e).to.not.exist
         done();
       })
@@ -144,9 +180,9 @@ describe('VirginActive.doLogin', function () {
 });
 
 
-describe('VirginActive.getDate', function () {
+describe('VirginActiveClass.getDate', function () {
 
-  var privateFn = va.__get__('getDate');
+  var vac = getNewVAC();
 
   var d = new Date()
   d.setDate(d.getDate()+7)
@@ -177,7 +213,7 @@ describe('VirginActive.getDate', function () {
 
   tests.forEach( function(t) {
     it(t.desc, function() {
-      var d = privateFn({
+      var d = vac.getDate({
         date: t.date,
         time: t.time
       })
@@ -192,12 +228,16 @@ describe('VirginActive.getDate', function () {
 
 
 
-describe('VirginActive.bookClass', function () {
+describe('VirginActiveClass.bookClass', function () {
 
   this.timeout(timeout)
 
+  var vac = getNewVAC({
+    date:'2018-02-08',
+    name:'Core',
+    time:'13:05'
+  });
   var nockGetTimetable = {}
-  var privateFn = va.__get__('bookClass');
 
   beforeEach (function () {
     nockGetTimetable.fn = nock(vaHost)
@@ -212,7 +252,8 @@ describe('VirginActive.bookClass', function () {
   testUnexpectedResponses({
     describe: 'Problems getting the timetable',
     errMsg: 'Timetable not as expected.',
-    fn: privateFn,
+    vacObj: vac,
+    vacFn: 'bookClass',
     nockObj: nockGetTimetable
   })
 
@@ -240,16 +281,23 @@ describe('VirginActive.bookClass', function () {
     testUnexpectedResponses({
       describe: 'Problems making the booking',
       errMsg: 'Unknown booking status: ',
-      fn: privateFn,
+      vacObj: vac,
+      vacFn: 'bookClass',
       nockObj: nockSubmitBooking
     })
 
 
     var states = [{
       dataFile: 'sample_successful_booking.html',
+      name: 'Core',
+      date: '2018-02-05',
+      time: '18:35',
       retState: 'booked' }, {
 
       dataFile: 'sample_waiting_list_booking.html',
+      name: 'Row',
+      date: '2018-02-08',
+      time: '12:30',
       retState: 'waitingList' }]
 
     states.forEach( function (el) {
@@ -262,10 +310,11 @@ describe('VirginActive.bookClass', function () {
         // Get a sample of a successful booking
         var bookingResponse = fs.readFileSync('./test/data/'+el.dataFile)
 
+        var vac2 = getNewVAC({name: el.name, date: el.date, time: el.time})
         nockSubmitBooking.fn
         .reply(200, bookingResponse)
 
-        privateFn(null, function (e,retState) {
+        vac2.bookClass(null, function (e,retState) {
           retState.should.equal(el.retState)
           done();
         })
@@ -276,13 +325,13 @@ describe('VirginActive.bookClass', function () {
 
       var cfgRestore = cfg.va.classToBook
 
-      cfg.va.classToBook = {
+      var vac2 = getNewVAC({
         name: 'Strength - Power Yoga',
         date: '2018-02-08',
         time: '18:00'
-      };
+      });
 
-      privateFn(null, function (e,retState) {
+      vac2.bookClass(null, function (e,retState) {
         retState.should.equal('booked')
         cfg.va.classToBook = cfgRestore
         done();
@@ -293,29 +342,30 @@ describe('VirginActive.bookClass', function () {
 
       var cfgRestore = cfg.va.classToBook
 
-      cfg.va.classToBook = {
+      var vac2 = getNewVAC({
         name: 'Yoga - Hatha',
         date: '2018-02-04',
         time: '16:00'
-      };
+      });
 
-      privateFn(null, function (e,retState) {
+      vac2.bookClass(null, function (e,retState) {
         retState.should.equal('full')
         cfg.va.classToBook = cfgRestore
         done();
       })
     });
+
     it('returns an error if the class is not found', function (done) {
 
       var cfgRestore = cfg.va.classToBook
 
-      cfg.va.classToBook = {
+      var vac2 = getNewVAC({
         name: 'Non-existent class',
         date: '2018-02-04',
         time: '16:00:00'
-      };
+      });
 
-      privateFn(null, function (e,retState) {
+      vac2.bookClass(null, function (e,retState) {
         e.should.equal('notFound')
         cfg.va.classToBook = cfgRestore
         done();
@@ -327,28 +377,30 @@ describe('VirginActive.bookClass', function () {
 
 
 
-describe('VirginActive.process', function () {
+describe('VirginActiveClass.process', function () {
 
   this.timeout(timeout)
-
-  var restoreLogin, restoreBooking
+  var vac, loginStub, bookingStub
 
   beforeEach ( function () {
-    restoreLogin = va.__set__('doLogin', function (p,cb) { cb(null) });
+    vac = getNewVAC()
+    loginStub   = sinon.stub(vac, 'doLogin')
+    bookingStub = sinon.stub(vac, 'bookClass')
   })
 
   afterEach ( function () {
-    restoreLogin()
-    restoreBooking()
+    loginStub.reset()
+    bookingStub.reset()
+    vac = {}
   })
 
   it('returns an error when there are problems logging in', function () {
 
-    restoreLogin   = va.__set__('doLogin',   function (p,cb) { cb('Simulated error') });
-    restoreBooking = va.__set__('bookClass', function (p,cb) { throw new Error('Should not reach here') });
+    loginStub.yields('Simulated error')
 
-    va.process(null, function (err, bookingStatus) {
-      err.should.equal('VirginActive.process: Could not log in: Simulated error')
+    vac.process(null, function (err, bookingStatus) {
+      err.should.equal('VirginActiveClass.process: Could not log in: Simulated error')
+      bookingStub.called.should.equal(false)
     })
 
   })
@@ -356,9 +408,10 @@ describe('VirginActive.process', function () {
 
   it('returns an error when there are problems booking class', function () {
 
-    restoreBooking = va.__set__('bookClass', function (p,cb) { cb('Simulated error') });
+    loginStub.yields(null)
+    bookingStub.yields('Simulated error')
 
-    va.process(null, function (err, bookingStatus) {
+    vac.process(null, function (err, bookingStatus) {
       err.should.equal('Simulated error')
     })
 
@@ -374,12 +427,12 @@ describe('VirginActive.process', function () {
 
   states.forEach( function (el) {
 
-    //it(el.testDesc, function () {
     it(el.testDesc, function () {
-   
-      restoreBooking = va.__set__('bookClass', function (p,cb) { cb(null,el.retState) });
-   
-      va.process(null, function (err, bookingStatus) {
+
+      loginStub.yields(null)
+      bookingStub.yields(null,el.retState)
+
+      vac.process(null, function (err, bookingStatus) {
         bookingStatus.should.equal(el.retState)
       })
     })

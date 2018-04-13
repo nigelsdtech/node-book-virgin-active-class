@@ -1,11 +1,10 @@
 var cfg                = require('config');
 var chai               = require('chai');
 var EmailNotification  = require('email-notification');
-var rewire             = require('rewire');
 var reporter           = require('reporter');
 var sinon              = require('sinon');
-var va                 = require('../../lib/VirginActive.js');
-var bvac               = rewire('../../lib/BookVirginActiveClass.js');
+var VirginActiveClass  = require('../../lib/VirginActiveClass.js');
+var bvac               = require('../../lib/BookVirginActiveClass.js');
 
 /*
  * Set up chai
@@ -14,7 +13,7 @@ chai.should();
 
 
 // Common testing timeout
-var timeout = cfg.testTimeout || (5*1000);
+var timeout = cfg.testTimeout || (1*1000);
 
 
 
@@ -27,122 +26,184 @@ describe('Running the script', function () {
 
   this.timeout(timeout)
 
-  var enStub      = sinon.stub(EmailNotification.prototype, 'allHaveBeenProcessed')
-  var enLabelStub = sinon.stub(EmailNotification.prototype, 'updateLabels')
-  var vaStub      = sinon.stub(va,                          'process')
-  var rptStub     = sinon.stub(reporter,                    'sendCompletionNotice')
-  var errRptStub  = sinon.stub(reporter,                    'handleError')
+  var tests = {
+      'contactVA' : {
+        title: 'contact VA',
+        stubContainer: VirginActiveClass.prototype,
+        stubFn: 'process',
+        stubVar: null },
+      'emailNotification' : {
+        title: 'search for email notification trigger',
+        stubContainer: EmailNotification.prototype,
+        stubFn: 'allHaveBeenProcessed',
+        stubVar: null },
+      'getVAClassDetails': {
+        title: 'get VA class Details',
+        stubContainer: VirginActiveClass.prototype,
+        stubFn: 'getVAClassDetails',
+        stubVar: null },
+      'sendErrRpt': {
+        title: 'send an error notice',
+        stubContainer: reporter,
+        stubFn: 'handleError',
+        stubVar: null },
+      'sendReport': {
+        title: 'send a completion notice',
+        stubContainer: reporter,
+        stubFn: 'sendCompletionNotice',
+        stubVar: null },
+      'updateLabels': {
+        title: 'update the email label',
+        stubContainer: EmailNotification.prototype,
+        stubFn: 'updateLabels',
+        stubVar: null }}
 
-  var tests = [{
-      code: "contactVA",
-      title: "contact VA",
-      stub: vaStub }, {
 
-      code: "sendReport",
-      title: "send a completion notice",
-      stub: rptStub }, {
-
-      code: "sendErrRpt",
-      title: "send an error notice",
-      stub: errRptStub }, {
-
-      code: "updateLabels",
-      title: "update the email label",
-      stub: enLabelStub }]
-
+  /**
+   * addNotCalledTests
+   *
+   * Convenience proc for quickly adding "it" mocha tests to check a stub was not called
+   *
+   */
   function addNotCalledTests(testsToRun) {
 
-    tests.forEach(function (test) {
-      for (var i = 0; i < testsToRun.length; i++) {
-        if (testsToRun[i] == test.code ) {
-          it ("Doesn't attempt to " + test.title, function () {
-            test.stub.called.should.equal(false)
+    testsToRun.forEach(function (ttr) {
+
+      for (testCode in tests) {
+
+        if (testCode == ttr) {
+
+          var t = tests[testCode]
+
+          it ("Doesn't attempt to " + t.title, function () {
+            t.stubVar.called.should.equal(false)
           })
-          break;
+          return null;
         }
       }
-    })
 
+      // If we got this far the specified testToRun doesn't exist
+      throw new Error ('Invalid test - ' + ttr)
+    })
   }
 
+
+  /**
+   * resetStubs
+   *
+   * Resets all stubs in the "test" variable above
+   *
+   */
   function resetStubs () {
-
-    tests.forEach( function (test) {
-      test.stub.reset()
-      test.stub.throws(test.code + ' - Error needs override')
+    var testCodes = Object.keys(tests)
+    testCodes.forEach( function (testCode) {
+      var t = tests[testCode]
+      if (t.stubVar != null) {
+        t.stubVar.reset()
+      }
     })
-
   }
 
+  before( function () {
+    // Create all the stubs
+    var testCodes = Object.keys(tests)
+    testCodes.forEach( function (testCode) {
+      var t = tests[testCode]
+      t.stubVar = sinon.stub(t.stubContainer, t.stubFn)
+    })
+  })
+
+  after( function () {
+    // Undoes all stubs in the "test" variable above
+    var testCodes = Object.keys(tests)
+    testCodes.forEach( function (testCode) {
+      var t = tests[testCode]
+        if (t.stubVar != null) {
+        t.stubVar.restore()
+      }
+    })
+  })
 
   describe('When there is nothing to process', function () {
 
     before( function (done) {
       resetStubs()
-      enStub.yields(null,true)
+      tests.emailNotification.stubVar.yields(null,true)
       bvac(done)
     })
 
-    it ("Calls the email notification module", function () {
-      enStub.called.should.equal(true)
+    it ('Calls the email notification module', function () {
+      tests.emailNotification.stubVar.called.should.equal(true)
     })
 
-    addNotCalledTests(["contactVa", "sendReport" , "sendErrRpt" , "updateLabels"])
+    addNotCalledTests(['contactVA', 'sendReport' , 'sendErrRpt' , 'updateLabels'])
   })
 
   describe('When the notification checker bugs out', function () {
 
     before( function (done) {
       resetStubs()
-      enStub.yields('Simulated error')
-      errRptStub.withArgs({errMsg: "BookVirginAciveClass.js Error checking processing is required: Simulated error"}).yields(null)
+      tests.emailNotification.stubVar.yields('Simulated error')
+      tests.sendErrRpt.stubVar.withArgs({errMsg: "BookVirginAciveClass.js Error checking processing is required: Simulated error"}).yields(null)
       bvac(done)
     })
 
-    addNotCalledTests(["contactVa", "sendReport" , "updateLabels"])
+    addNotCalledTests(["contactVA", "sendReport" , "updateLabels"])
 
     it('Passes the error to the error reporter', function() {
-      errRptStub.called.should.equal(true)
+      tests.sendErrRpt.stubVar.called.should.equal(true)
     })
   })
 
   describe('When a notification is received', function () {
 
+    var spoofDetails
+
     function commonReset() {
       resetStubs()
-      enStub.yields(null,false)
-      vaStub.reset()
+      tests.emailNotification.stubVar.yields(null,false)
+
+      spoofDetails = {
+        bookingStatus : 'overrideMe',
+        clubName: cfg.va.clubName,
+        endTime : 'overrideMe',
+        name : cfg.va.classToBook.name,
+        startTime : cfg.va.classToBook.date + 'T' + cfg.va.classToBook.time + ':00'
+      }
+
     }
 
     describe('When there are problems making the booking', function () {
 
       before( function (done) {
         commonReset()
-        vaStub.yields('Simulated error')
-        errRptStub.withArgs({errMsg: "BookVirginAciveClass.js Error booking class: Simulated error"}).yields(null)
+        tests.contactVA.stubVar.yields('Simulated error')
+        tests.sendErrRpt.stubVar.withArgs({errMsg: "BookVirginAciveClass.js Error booking class: Simulated error"}).yields(null)
         bvac(done)
       })
 
       it('Passes the error to the error reporter', function() {
-        errRptStub.called.should.equal(true)
+        tests.sendErrRpt.stubVar.called.should.equal(true)
       })
 
       addNotCalledTests(["sendReport" , "updateLabels"])
     })
 
-    var classDesc = cfg.va.classToBook.name + ' (' + cfg.va.classToBook.date + ' ' + cfg.va.classToBook.time + ')' + ' booking status: '
+    var classDesc = cfg.va.classToBook.name + ' (' + cfg.va.classToBook.date + 'T' + cfg.va.classToBook.time + ':00)' + ' booking status: '
 
 
     describe('When the class is full', function () {
       before( function (done) {
         commonReset()
-        vaStub.yields(null, 'full')
-        errRptStub.withArgs({errMsg: classDesc + "full"}).yields(null)
+        tests.contactVA.stubVar.yields(null, 'full')
+        spoofDetails.bookingStatus = 'full'
+        tests.getVAClassDetails.stubVar.returns(spoofDetails)
+        tests.sendErrRpt.stubVar.withArgs({errMsg: classDesc + "full"}).yields(null)
         bvac(done)
       })
 
       it('Passes the error to the error reporter', function() {
-        errRptStub.called.should.equal(true)
+        tests.sendErrRpt.stubVar.called.should.equal(true)
       })
 
       addNotCalledTests(["sendReport" , "updateLabels"])
@@ -163,11 +224,12 @@ describe('Running the script', function () {
 
         before( function (done) {
           commonReset()
-          vaStub.yields(null, bs.status)
-          console.log('Expecting to call with ' + classDesc + bs.status)
-          rptStub.reset()
-          rptStub.withArgs({body: classDesc + bs.status}).yields(null)
-          enLabelStub.withArgs({applyProcessedLabel: true, markAsRead: true}).yields(null,[])
+          tests.contactVA.stubVar.yields(null, bs.status)
+          spoofDetails.bookingStatus = bs.status
+          tests.getVAClassDetails.stubVar.returns(spoofDetails)
+          tests.sendReport.stubVar.reset()
+          tests.sendReport.stubVar.withArgs({body: classDesc + bs.status}).yields(null)
+          tests.updateLabels.stubVar.withArgs({applyProcessedLabel: true, markAsRead: true}).yields(null,[])
           bvac(done)
         })
 
@@ -175,10 +237,10 @@ describe('Running the script', function () {
         addNotCalledTests(["sendErrRpt"])
 
         it("Sends a report saying you are " + bs.status, function() {
-          rptStub.called.should.equal(true)
+          tests.sendReport.stubVar.called.should.equal(true)
         })
         it("Update labels on the email", function() {
-          enLabelStub.called.should.equal(true)
+          tests.updateLabels.stubVar.called.should.equal(true)
         })
       })
     })
