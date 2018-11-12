@@ -79,8 +79,8 @@ Now add the following to configs/local.json (descriptions of each item are avail
   va: {
     username: 'OVERRIDE_ME',
     password: 'OVERRIDE_ME'
-  },
-
+  }
+}
 
 ```
 
