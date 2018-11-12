@@ -4,12 +4,22 @@
   "description": "Books a class at Virgin Active and emails you with confirmation",
   "main": "index.js",
   "scripts": {
+    "postinstall": "mkdir logs ~/.credentials",
     "start": "sh scripts/start.sh",
     "test": "sh scripts/test.sh"
   },
   "keywords": [],
-  "author": "",
+  "author": "Nigel Stephen D'Souza",
+  "homepage": "https://github.com/nigelsdtech/node-book-virgin-active-class",
   "license": "ISC",
+  "repository": {
+    "type" : "git",
+    "url" : "https://github.com/nigelsdtech/node-book-virgin-active-class.git"
+  },
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
   "dependencies": {
     "cheerio": "^1.0.0-rc.2",
     "config": "^1.29.2",

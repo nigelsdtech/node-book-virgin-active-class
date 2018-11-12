@@ -1,6 +1,9 @@
 #!/bin/sh
 
-. ~/bin/setup_node_env.sh
+
+if [ -f ~/bin/setup_node_env.sh ]; then
+	. ~/bin/setup_node_env.sh
+fi
 
 
 # Default instance
