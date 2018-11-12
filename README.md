@@ -3,6 +3,8 @@
 This script automatically books a gym class at Virgin Active (UK).
 
 
+<br>
+<br>
 
 
 ## How it works
@@ -183,6 +185,8 @@ For example, setup a crontab to run at 7am on Mondays and Tuesdays and run the r
 ```
 
 
+<br>
+<br>
 
 ## Automated testing
 
