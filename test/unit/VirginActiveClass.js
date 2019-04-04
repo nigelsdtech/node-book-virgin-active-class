@@ -217,7 +217,7 @@ describe('VirginActiveClass.doLogin', function () {
 
   testUnexpectedResponses({
     describe: 'Problems getting the login form',
-    errMsg: 'VirginActiveClass.doLogin: login form is not as expected',
+    errMsg: 'Could not get login form: ',
     vacObj: vac,
     vacFn: 'doLogin',
     nockObj: nockGetForm
@@ -245,7 +245,7 @@ describe('VirginActiveClass.doLogin', function () {
 
     testUnexpectedResponses({
       describe: 'Problems submitting the login form',
-      errMsg: 'Login response not as expected.',
+      errMsg: 'Could not log in: ',
       vacObj: vac,
       vacFn: 'doLogin',
       nockObj: nockSubmitForm
@@ -451,7 +451,7 @@ describe('VirginActiveClass.bookClass', function () {
     }
   }]
 
-  tests.forEach (function (t) { t.inputArgs = {clubId : 421, classId: 123} } )
+  tests.forEach (function (t) { t.inputArgs = {clubId : 421, classId: 123, cookies: "abc=123; def=456; ghi=789"} } )
 
   setupBasicAPITests({
     fnName : 'bookClass',
