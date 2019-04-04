@@ -15,7 +15,7 @@ chai.should();
 // Common testing timeout
 var timeout = cfg.testTimeout || (5*1000);
 
-var vaHost = 'https://www.virginactive.co.uk'
+var vaHost = cfg.vaHost.baseUrl
 
 
 
@@ -44,11 +44,11 @@ function testUnexpectedResponses(params) {
   if (params.only) { descFn = describe.only }
 
   descFn(params.describe, function () {
-    it('returns an error if the connection times out', function (done) {
+    it.skip('returns an error if the connection times out', function (done) {
 
       params.nockObj.fn
-      .socketDelay(20000)
-      .reply(200,'some bad body')
+      .socketDelay(6*1000)
+      .reply(200,'should timeout before getting this body')
 
       params.vacObj[params.vacFn](null, function (e, form) {
         e.code.should.equal('ESOCKETTIMEDOUT');
@@ -71,6 +71,92 @@ function testUnexpectedResponses(params) {
 
 
 /**
+ * setupBasicAPITests
+ *
+ * Simple framework for creating + running a set of tests on an API response
+ *
+ * @param {object=}  params
+ * @param {string}   params.fnName                    - The name of the function to be called in the Class
+ * @param {context}  params.callerContext             - The "this" context of the caller
+ * @param {object=}  params.reqDetails
+ * @param {string}   params.reqDetails.uri            - The URI being hit
+ * @param {string=}  params.reqDetails.method         - The http method to use. Either "get" or "post".
+ * @param {object}   params.reqDetails.qs             - The query string sent with the request (optional)
+ * @param {object=}  params.tests[]
+ * @param {string}   params.tests.expectedErr         - Error the user expects to see. Send in either this or expectedRet
+ * @param {string}   params.tests.expectedRet         - Return value the user expects to see. Send in either this or expectedError
+ * @param {object}   params.tests.inputArgs           - Input arg to be sent in when executing the function
+ * @param {boolean}  params.tests.only                - True if you only want to run this scenario
+ * @param {object=}  params.tests.stubbedResponse
+ * @param {integer}  params.tests.stubbedResponse.statusCode - HTTP status code of the return
+ * @param {string}   params.tests.stubbedResponse.body       - HTTP body of the return
+ * @param {string}   params.tests.testInfo            - Description of behaviour (corresponds to 'it' function in Mocha)
+ *
+ */
+function setupBasicAPITests(params) {
+
+  params.callerContext.timeout(timeout)
+
+  // This is an object so its real-time value can be passed to downstream functions
+  var nockIntercept = {}
+  var vac  = getNewVAC();
+
+  beforeEach (function () {
+    nockIntercept = nock(vaHost)
+    .log(console.log)
+    .intercept(params.reqDetails.uri, params.reqDetails.method)
+
+    if (params.reqDetails.qs) {
+      nockIntercept.query(params.reqDetails.qs)
+    }
+
+  })
+
+  afterEach (function () {
+    nock.cleanAll()
+  })
+
+  /*
+  testUnexpectedResponses({
+    describe: 'Problems with the request',
+    errMsg: 'Could not get clubs: Resp statusCode 503',
+    vacObj: vac,
+    vacFn: 'getClubId',
+    nockObj: nockGetClubs
+  })
+  */
+
+  params.tests.forEach(function (test) {
+
+    if (!test.stubbedResponse.statusCode) {
+      test.stubbedResponse.statusCode = 200
+    }
+
+    var itFn = it
+    if (test.only) { itFn = it.only }
+
+    itFn(test.testInfo, function (done) {
+        nockIntercept
+        .reply(test.stubbedResponse.statusCode, test.stubbedResponse.body)
+
+        vac[params.fnName](test.inputArgs, function (e,ret) {
+
+          if (test.expectedErr) {
+            e.should.equal(test.expectedErr)
+          } else {
+            chai.expect(e).to.not.exist
+            ret.should.deep.equal(test.expectedRet)
+          }
+
+          done();
+        })
+    })
+  })
+
+}
+
+
+/**
  * getNewVAC
  *
  * Quickly generates a new VAC object
@@ -87,7 +173,7 @@ function getNewVAC (params) {
 
   var p = {
     clubName : 'Fiction Club',
-    date : 'one week later',
+    date : '2019-03-29',
     name : 'Super duper abs',
     password : 'testPassword',
     time : '18:30',
@@ -119,7 +205,9 @@ describe('VirginActiveClass.doLogin', function () {
   var self = this
 
   beforeEach (function () {
-    nockGetForm.fn = nock(vaHost).get('/login')
+    nockGetForm.fn = nock(vaHost)
+    .get(cfg.vaHost.loginFormUri)
+    .query(false)
   })
 
   afterEach (function () {
@@ -145,7 +233,9 @@ describe('VirginActiveClass.doLogin', function () {
       nockGetForm.fn
       .reply(200,loginForm)
 
-      nockSubmitForm.fn = nock(vaHost).post('/login')
+      nockSubmitForm.fn = nock(vaHost)
+      .post('/login')
+      .query(true)
     })
 
     afterEach (function () {
@@ -164,10 +254,37 @@ describe('VirginActiveClass.doLogin', function () {
 
     it('returns a successful login', function (done) {
 
+
+      /*
+       *  These requests go as follows:
+       *
+       *  /login?sf_cntrl_id=ctl00%24Body%24C001 -> 302
+       *  /Sitefinity/Authenticate/SWT?some_params=something -> 302 (returns va-auth cookie)
+       *  /my-account?some_other_params=something_else -> 200 (returns cookies: SF-TokenId, .AspNet.Cookies)
+       */
+
       // Get a sample of a "good" login page
+      // this is /login
       nockSubmitForm.fn
-      .reply(200, 'generic response', {
-        'Set-Cookie': ['.ASPXAUTH=abcdefg; path=/; HttpOnly', '_user=abcdefg']
+      .reply(302, 'This login page should redirect', {
+        'Location': cfg.vaHost.baseUrl + '/Sitefinity/Authenticate/SWT?some_param=something'
+      })
+
+      // this is /Sitefinity
+      nock(vaHost)
+      .get('/Sitefinity/Authenticate/SWT')
+      .query(true)
+      .reply(302, 'This Sitefinity page should redirect', {
+        'Location': cfg.vaHost.baseUrl + '/my-account?some_param=something',
+        'Set-Cookie': ['va-auth=abcdefg; path=/; secure; HttpOnly']
+      })
+
+      // this is /my-account
+      nock(vaHost)
+      .get('/my-account')
+      .query(true)
+      .reply(200, 'This is the final login page', {
+        'Set-Cookie': ['SF-TokenId=12345; path=/', '.AspNet.Cookies=abcdefg; path=/; secure; HttpOnly']
       })
 
       vac.doLogin(null, function (e) {
@@ -178,6 +295,85 @@ describe('VirginActiveClass.doLogin', function () {
     });
   });
 });
+
+
+describe('VirginActiveClass.getClassDetails', function () {
+
+  var tests = [{
+    testInfo       : 'returns an error when the url gives a response but body.error is set',
+    expectedErr    : 'Could not get class: body.error was set',
+    stubbedResponse: {
+      body : { something: 'No class for you', error: 'body.error was set'},
+    }}, {
+
+    testInfo       : 'returns an error when the url gives a response but the class can\'t be found',
+    expectedErr    : 'Could not get class: Class Id not found.',
+    stubbedResponse: {
+      body : { error: null, data : { classes: [{name: 'Not your class',id: 1}, {name: 'Also not your class',id: 2}] } }
+    }}, {
+
+    testInfo       : 'returns an error when the url gives a response but the class timing can\'t be found',
+    expectedErr    : 'Could not get class: Class timing not found.',
+    stubbedResponse : {
+      body : JSON.parse(fs.readFileSync('./test/data/getClubTimetable.json','utf8').replace("TEST_CLASS_DATE","2019-03-30"))
+    }}, {
+
+    testInfo       : 'Response is ok and the class with the timing is found',
+    expectedRet    : {id:123456, bookingAvailability: "TEST_CLASS_STATUS"},
+    stubbedResponse: {
+      body : JSON.parse(fs.readFileSync('./test/data/getClubTimetable.json','utf8').replace("TEST_CLASS_DATE","2019-03-29"))
+    }
+  }]
+
+  tests.forEach (function (t) { t.inputArgs = {clubId : 421} } )
+
+  setupBasicAPITests({
+    fnName : 'getClassDetails',
+    callerContext: this,
+    reqDetails : {
+      uri: cfg.vaHost.getClassIdUri,
+      method: 'get',
+      qs: {id: 421},
+    },
+    tests: tests
+  })
+
+})
+
+
+describe('VirginActiveClass.getClubId', function () {
+
+  var tests = [{
+    testInfo       : 'returns an error when the url gives a response but body.error is set',
+    expectedErr    : 'Could not get club: body.error was set',
+    stubbedResponse: {
+      body : {error: 'body.error was set', clubs: 'No clubs for you'}
+    }
+  }, {
+    testInfo       : 'returns an error when the url gives a response but the club can\'t be found',
+    expectedErr    : 'Club Id not found.',
+    stubbedResponse: {
+      body : { error: null, data : { clubs: [ { name: 'Not your club', clubId: 1 }, { name: 'Also not your club', clubId: 2 }] } },
+    }
+  }, {
+    testInfo       : 'Response is ok and the club is found',
+    expectedRet    : 2,
+    stubbedResponse: {
+      body : JSON.parse(fs.readFileSync('./test/data/getClubDetails.json'))
+    }
+  }]
+
+  setupBasicAPITests({
+    fnName : 'getClubId',
+    callerContext: this,
+    reqDetails : {
+      uri: cfg.vaHost.getClubIdUri,
+      method: 'get'
+    },
+    tests: tests
+  })
+
+})
 
 
 describe('VirginActiveClass.getDate', function () {
@@ -227,152 +423,47 @@ describe('VirginActiveClass.getDate', function () {
 
 
 
-
 describe('VirginActiveClass.bookClass', function () {
 
-  this.timeout(timeout)
+  var tests = [{
+    testInfo       : 'returns an error when the url gives a response but body.error is set',
+    expectedErr    : 'Could not book class: body.error was set',
+    stubbedResponse: {
+      body : { something: 'No class for you', error: 'body.error was set'},
+    }}, {
 
-  var vac = getNewVAC({
-    date:'2018-02-08',
-    name:'Core',
-    time:'13:05'
-  });
-  var nockGetTimetable = {}
+    testInfo       : 'returns an error when the url gives a response but booking state is unrecognized',
+    expectedErr    : 'Could not book class: unknown booking status: TEST_BOOKING_STATE',
+    stubbedResponse: {
+      body : JSON.parse(fs.readFileSync('./test/data/BookClass.json','utf8'))
+    }}, {
 
-  beforeEach (function () {
-    nockGetTimetable.fn = nock(vaHost)
-    .get('/clubs/fiction-club/timetable')
+    testInfo       : 'Response is ok and the user is on the waiting list',
+    expectedRet    : 'waitingList',
+    stubbedResponse: {
+      body : JSON.parse(fs.readFileSync('./test/data/BookClass.json','utf8').replace("TEST_BOOKING_STATE","OVERBOOKED_WAITINGLIST"))
+    }}, {
+
+    testInfo       : 'Response is ok and the class has been booked',
+    expectedRet    : 'booked',
+    stubbedResponse: {
+      body : JSON.parse(fs.readFileSync('./test/data/BookClass.json','utf8').replace("TEST_BOOKING_STATE","BOOKED"))
+    }
+  }]
+
+  tests.forEach (function (t) { t.inputArgs = {clubId : 421, classId: 123} } )
+
+  setupBasicAPITests({
+    fnName : 'bookClass',
+    callerContext: this,
+    reqDetails : {
+      uri: cfg.vaHost.bookClassUri,
+      method: 'post',
+      body: {clubId: "421", classId: 123},
+    },
+    tests: tests
   })
 
-  afterEach (function () {
-    nock.cleanAll()
-  })
-
-
-  testUnexpectedResponses({
-    describe: 'Problems getting the timetable',
-    errMsg: 'Timetable not as expected.',
-    vacObj: vac,
-    vacFn: 'bookClass',
-    nockObj: nockGetTimetable
-  })
-
-
-
-  describe('Getting the timetable successfully', function () {
-
-    var loginForm = fs.readFileSync('./test/data/sample_timetable.html')
-    var nockSubmitBooking = {}
-
-    beforeEach (function () {
-      nockGetTimetable.fn
-      .reply(200,loginForm)
-
-      nockSubmitBooking.fn = nock(vaHost)
-      .get('/api/sitecore/VaClub/ViewTimetableBook')
-      .query(true)
-    })
-
-    afterEach (function () {
-      nock.cleanAll()
-    })
-
-
-    testUnexpectedResponses({
-      describe: 'Problems making the booking',
-      errMsg: 'Unknown booking status: ',
-      vacObj: vac,
-      vacFn: 'bookClass',
-      nockObj: nockSubmitBooking
-    })
-
-
-    var states = [{
-      dataFile: 'sample_successful_booking.html',
-      name: 'Core',
-      date: '2018-02-05',
-      time: '18:35',
-      retState: 'booked' }, {
-
-      dataFile: 'sample_waiting_list_booking.html',
-      name: 'Row',
-      date: '2018-02-08',
-      time: '12:30',
-      retState: 'waitingList' }]
-
-    states.forEach( function (el) {
-
-      var itFn = it
-      if (el.only) { itFn = it.only }
-
-      itFn('returns the ' + el.retState + ' response when appropriate', function (done) {
-
-        // Get a sample of a successful booking
-        var bookingResponse = fs.readFileSync('./test/data/'+el.dataFile)
-
-        var vac2 = getNewVAC({name: el.name, date: el.date, time: el.time})
-        nockSubmitBooking.fn
-        .reply(200, bookingResponse)
-
-        vac2.bookClass(null, function (e,retState) {
-          retState.should.equal(el.retState)
-          done();
-        })
-      });
-    })
-
-    it('bails out early when you\'re already booked', function (done) {
-
-      var cfgRestore = cfg.va.classToBook
-
-      var vac2 = getNewVAC({
-        name: 'Strength - Power Yoga',
-        date: '2018-02-08',
-        time: '18:00'
-      });
-
-      vac2.bookClass(null, function (e,retState) {
-        retState.should.equal('booked')
-        cfg.va.classToBook = cfgRestore
-        done();
-      })
-    });
-
-    it('bails out early when the class is full', function (done) {
-
-      var cfgRestore = cfg.va.classToBook
-
-      var vac2 = getNewVAC({
-        name: 'Yoga - Hatha',
-        date: '2018-02-04',
-        time: '16:00'
-      });
-
-      vac2.bookClass(null, function (e,retState) {
-        retState.should.equal('full')
-        cfg.va.classToBook = cfgRestore
-        done();
-      })
-    });
-
-    it('returns an error if the class is not found', function (done) {
-
-      var cfgRestore = cfg.va.classToBook
-
-      var vac2 = getNewVAC({
-        name: 'Non-existent class',
-        date: '2018-02-04',
-        time: '16:00:00'
-      });
-
-      vac2.bookClass(null, function (e,retState) {
-        e.should.equal('notFound')
-        cfg.va.classToBook = cfgRestore
-        done();
-      })
-    })
-
-  });
 });
 
 
@@ -380,41 +471,82 @@ describe('VirginActiveClass.bookClass', function () {
 describe('VirginActiveClass.process', function () {
 
   this.timeout(timeout)
-  var vac, loginStub, bookingStub
+  var vac, loginStub, getClubStub, getClassStub, bookingStub
 
   beforeEach ( function () {
     vac = getNewVAC()
-    loginStub   = sinon.stub(vac, 'doLogin')
-    bookingStub = sinon.stub(vac, 'bookClass')
+    loginStub    = sinon.stub(vac, 'doLogin')
+    getClubStub  = sinon.stub(vac, 'getClubId')
+    getClassStub = sinon.stub(vac, 'getClassDetails')
+    bookingStub  = sinon.stub(vac, 'bookClass')
   })
 
   afterEach ( function () {
     loginStub.reset()
+    getClubStub.reset()
+    getClassStub.reset()
     bookingStub.reset()
     vac = {}
   })
 
-  it('returns an error when there are problems logging in', function () {
+  it('returns an error when there are problems logging in', function (done) {
+    loginStub.yields('Simulated login error')
 
-    loginStub.yields('Simulated error')
-
-    vac.process(null, function (err, bookingStatus) {
-      err.should.equal('VirginActiveClass.process: Could not log in: Simulated error')
-      bookingStub.called.should.equal(false)
+    vac.process(null, function (err) {
+      err.should.equal('VirginActiveClass.process: Simulated login error')
+      getClubStub .called.should.equal(false)
+      getClassStub.called.should.equal(false)
+      bookingStub .called.should.equal(false)
+      done()
     })
-
   })
 
-
-  it('returns an error when there are problems booking class', function () {
-
+  it('returns an error when there are problems getting the club id', function (done) {
     loginStub.yields(null)
-    bookingStub.yields('Simulated error')
+    getClubStub.yields('Simulated club id error')
 
     vac.process(null, function (err, bookingStatus) {
-      err.should.equal('Simulated error')
+      err.should.equal('VirginActiveClass.process: Simulated club id error')
+      getClassStub.called.should.equal(false)
+      bookingStub .called.should.equal(false)
+      done()
     })
+  })
 
+  it('returns an error when there are problems getting the class id', function (done) {
+    loginStub.yields(null)
+    getClubStub.yields(null, 421)
+    getClassStub.yields('Simulated class id error')
+
+    vac.process(null, function (err, bookingStatus) {
+      err.should.equal('VirginActiveClass.process: Simulated class id error')
+      bookingStub.called.should.equal(false)
+      done()
+    })
+  })
+
+  it('returns an error when there is an unrecognized class status', function (done) {
+    loginStub.yields(null)
+    getClubStub.yields(null, 421)
+    getClassStub.yields(null, {id: 123, bookingAvailability: 'Something odd'})
+
+    vac.process(null, function (err, bookingStatus) {
+      err.should.equal('VirginActiveClass.process: Unknown class status: Something odd')
+      bookingStub.called.should.equal(false)
+      done()
+    })
+  })
+
+  it('returns an error when there are problems booking the class', function (done) {
+    loginStub.yields(null)
+    getClubStub.yields(null, 421)
+    getClassStub.yields(null, {id: 123, bookingAvailability: 'Available'})
+    bookingStub.yields('Simulated booking error')
+
+    vac.process(null, function (err, bookingStatus) {
+      err.should.equal('VirginActiveClass.process: Simulated booking error')
+      done()
+    })
   })
 
   var states = [{
@@ -423,17 +555,21 @@ describe('VirginActiveClass.process', function () {
     testDesc: 'returns "waitingList" when placed on the waitingList',
     retState: 'waitingList' }, {
     testDesc: 'returns "full" when the class is full and cannot be booked',
+    vaRetState: 'BOOKED',
     retState: 'full' }]
 
   states.forEach( function (el) {
 
-    it(el.testDesc, function () {
+    it(el.testDesc, function (done) {
 
       loginStub.yields(null)
+      getClubStub.yields(null, 421)
+      getClassStub.yields(null, {id: 123, bookingAvailability: 'Available'})
       bookingStub.yields(null,el.retState)
 
       vac.process(null, function (err, bookingStatus) {
         bookingStatus.should.equal(el.retState)
+        done()
       })
     })
 
