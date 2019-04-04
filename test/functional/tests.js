@@ -163,7 +163,7 @@ function startScript(params, cb) {
     } ,3000)
     return d.promise
   })
-  .fin(cb)
+  .done(cb)
 
 }
 
