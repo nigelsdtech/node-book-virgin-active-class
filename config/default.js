@@ -57,6 +57,14 @@ module.exports = {
     }
   },
 
+  vaHost: {
+    baseUrl: 'https://www.virginactive.co.uk',
+    bookClassUri: '/api/Class/BookClass',
+    getClassIdUri: '/api/club/getclubtimetable',
+    getClubIdUri: '/api/club/GetClubDetails',
+    loginFormUri: '/login'
+  },
+
   reporter: {
     appName             : defer( function (cfg) {
       var subject = cfg.appName
