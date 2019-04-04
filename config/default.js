@@ -9,7 +9,12 @@ module.exports = {
     credentialsDir:   process.env.HOME+'/.credentials',
     clientSecretFile: defer( function (cfg) { return cfg.auth.credentialsDir+'/client_secret.json' } ),
     tokenFileDir:     defer( function (cfg) { return cfg.auth.credentialsDir } ),
-    tokenFile:        defer( function (cfg) { return 'access_token_'+cfg.appName+ '-' + process.env.NODE_ENV+'.json' } ),
+    tokenFile:        defer( function (cfg) {
+      var ret = 'access_token_' + cfg.appName
+      if (process.env.NODE_ENV) { ret += '-' + process.env.NODE_ENV}
+      ret += '.json'
+      return ret
+    }),
     googleScopes:     ['https://mail.google.com']
   },
 
