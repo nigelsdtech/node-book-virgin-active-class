@@ -1,0 +1,145 @@
+{
+  "error": null,
+  "data": {
+    "clubId": 2,
+    "clubName": "Fiction Club",
+    "classes": [
+      {
+        "id": 23,
+        "name": "Aqua"
+      },
+      {
+        "id": 21201,
+        "name": "Barre"
+      },
+      {
+        "id": 123,
+        "name": "Super duper abs"
+      }
+    ],
+    "classTimes": [
+      {
+        "id": 143295,
+        "classId": 21201,
+        "status": "Waitlist",
+        "capacity": 20,
+        "booked": 20,
+        "waitlistCapacity": 10,
+        "waitlistCount": 2,
+        "startTime": "2019-03-26T13:15:00+00:00",
+        "endTime": "2019-03-26T14:00:00+00:00"
+      },
+      {
+        "id": 142192,
+        "classId": 21201,
+        "status": "Waitlist",
+        "capacity": 20,
+        "booked": 20,
+        "waitlistCapacity": 50,
+        "waitlistCount": 14,
+        "startTime": "2019-03-27T11:45:00+00:00",
+        "endTime": "2019-03-27T12:30:00+00:00"
+      },
+      {
+        "id": 142437,
+        "classId": 21201,
+        "status": "Waitlist",
+        "capacity": 20,
+        "booked": 20,
+        "waitlistCapacity": 10,
+        "waitlistCount": 9,
+        "startTime": "2019-03-28T18:50:00+00:00",
+        "endTime": "2019-03-28T19:35:00+00:00"
+      },
+      {
+        "id": 142682,
+        "classId": 21201,
+        "status": "Waitlist",
+        "capacity": 20,
+        "booked": 20,
+        "waitlistCapacity": 10,
+        "waitlistCount": 8,
+        "startTime": "2019-03-31T10:00:00+01:00",
+        "endTime": "2019-03-31T10:45:00+01:00"
+      },
+      {
+        "id": 78911,
+        "classId": 23,
+        "status": "Available",
+        "capacity": 20,
+        "booked": 12,
+        "waitlistCapacity": 10,
+        "waitlistCount": 0,
+        "startTime": "2019-03-27T18:30:00+00:00",
+        "endTime": "2019-03-27T19:15:00+00:00"
+      },
+      {
+        "id": 68522,
+        "classId": 23,
+        "status": "Available",
+        "capacity": 20,
+        "booked": 12,
+        "waitlistCapacity": 10,
+        "waitlistCount": 0,
+        "startTime": "2019-03-30T09:00:00+00:00",
+        "endTime": "2019-03-30T09:45:00+00:00"
+      },
+      {
+        "id": 108702,
+        "classId": 23,
+        "status": "Available",
+        "capacity": 20,
+        "booked": 11,
+        "waitlistCapacity": 10,
+        "waitlistCount": 0,
+        "startTime": "2019-03-30T10:00:00+00:00",
+        "endTime": "2019-03-30T10:45:00+00:00"
+      },
+      {
+        "id": 69935,
+        "classId": 23,
+        "status": "Available",
+        "capacity": 20,
+        "booked": 16,
+        "waitlistCapacity": 10,
+        "waitlistCount": 0,
+        "startTime": "2019-03-31T10:00:00+01:00",
+        "endTime": "2019-03-31T10:45:00+01:00"
+      },
+      {
+        "id": 142683,
+        "classId": 123,
+        "status": "Waitlist",
+        "capacity": 20,
+        "booked": 20,
+        "waitlistCapacity": 10,
+        "waitlistCount": 8,
+        "startTime": "2019-03-31T10:00:00+01:00",
+        "endTime": "2019-03-31T10:45:00+01:00"
+      },
+      {
+        "id": 69936,
+        "classId": 123,
+        "status": "Available",
+        "capacity": 20,
+        "booked": 16,
+        "waitlistCapacity": 10,
+        "waitlistCount": 0,
+        "startTime": "2019-03-31T10:00:00+01:00",
+        "endTime": "2019-03-31T10:45:00+01:00"
+      },
+      {
+        "id": 123456,
+        "classId": 123,
+        "status": "TEST_CLASS_STATUS",
+        "capacity": 26,
+        "booked": 4,
+        "waitlistCapacity": 13,
+        "waitlistCount": 0,
+        "startTime": "TEST_CLASS_DATET18:30:00+00:00",
+        "endTime": "2019-03-29T19:05:00+00:00"
+      }
+    ]
+  },
+  "success": true
+}

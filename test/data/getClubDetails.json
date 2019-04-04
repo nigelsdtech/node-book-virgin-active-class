@@ -1,0 +1,23 @@
+{
+  "error": null,
+  "data": {
+    "clubs": [
+      {
+        "clubId": 1,
+        "name": "Haig Club",
+        "compositeAddress": "123 Haig st"
+      },
+      {
+        "clubId": 2,
+        "name": "Fiction Club",
+        "compositeAddress": "123 Fiction st"
+      },
+      {
+        "clubId": 3,
+        "name": "Polo Club",
+        "compositeAddress": "123 Polo st"
+      }
+    ]
+  },
+  "success": true
+}

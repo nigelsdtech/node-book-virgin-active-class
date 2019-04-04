@@ -1,0 +1,24 @@
+{
+  "error": null,
+  "data": {
+    "activityId": null,
+    "activityGroupId": null,
+    "activityGroupName": null,
+    "clubId": 421,
+    "clubName": null,
+    "classDescription": null,
+    "classId": 81096,
+    "classImageUrl": "/images/default-source/class-images/2018_core.jpg",
+    "className": "Core",
+    "classSubtitle": "Cardio. Endurance. Speed.",
+    "endTime": "2019-04-04T14:35:00+01:00",
+    "instructor": "David Kelly",
+    "participationId": 1032292,
+    "participationListIndex": 11,
+    "room": "Gym Floor",
+    "startTime": "2019-04-04T14:05:00+01:00",
+    "state": "TEST_BOOKING_STATE",
+    "waitingListIndex": 0
+  },
+  "success": true
+}
