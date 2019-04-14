@@ -16,7 +16,7 @@ chai.should();
 
 
 // Common testing timeout
-var timeout = cfg.testTimeout || (15*1000);
+var timeout = cfg.testTimeout || (20*1000);
 
 
   /*
